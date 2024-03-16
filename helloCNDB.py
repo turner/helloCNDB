@@ -6,8 +6,8 @@ __description__ = \
 Converting *.sw to *.cndb format
 """
 
-__author__ = " Antonio B. Oliveira Junior"
-__date__   = "Sep/2023"
+__author__ = " Antonio B. Oliveira Junior and Douglass Turner"
+__date__   = "Mar/2024"
 
 ################################################################
 # 
