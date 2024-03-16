@@ -45,22 +45,22 @@ def to_float(value):
 b_time = time.time()
 
 
-file_sw = arguments.f
+spacewalkFile = arguments.f
 name    = arguments.arg_name
 cndbf = h5py.File(name + '.cndb', 'w')
 
 
-info_dict = {}
-first_line = file_sw.readline().strip()
+spacewalkMetaData = {}
+first_line = spacewalkFile.readline().strip()
    
 if first_line.startswith('#'):
     entries = first_line[2:].split()  #[2:] because have ##
     
     for entry in entries:
         key, value = entry.split('=')
-        info_dict[key] = value
+        spacewalkMetaData[key] = value
 
-info = {
+metaData = {
     'version' : '1.0.0',
     'info' : 'Encode',
     'title': 'The Nucleome Data Bank: Web-based Resources Simulate and Analyze the Three-Dimensional Genome',
@@ -71,60 +71,74 @@ info = {
     'chains' : ''
     }
 
-info.update(info_dict) #including information from the sw header
+metaData.update(spacewalkMetaData)
 
-H = cndbf.create_group('Header')
-H.attrs.update(info)
+header = cndbf.create_group('Header')
+header.attrs.update(metaData)
 
 print('Converting file...')
 
-for line in file_sw:
-    info = line.split()
+for line in spacewalkFile:
+    record = line.split()
 
-    if info[0] == 'chromosome':
+    if record[0] == 'chromosome':
         loop = 0
         types = []
-        frame= [] 
-        chr_name = ''
+        frame= []
         inframe = False
-        C = cndbf.create_group(info_dict['name'])
-        #C.create_dataset('loops', data=[]) #empy parameter because its not prersent in sw file
-        #C.create_dataset('types',data=[]) #empy parameter because its not prersent in sw file
-        pos = C.create_group('spatial_position')
 
-    elif info[0] == 'trace':
+        rootName = spacewalkMetaData['name']
+        root = cndbf.create_group(rootName)
+
+        genomicPosition = root.create_group('genomic_position')
+        spatialPosition = root.create_group('spatial_position')
+
+    elif record[0] == 'trace':
         if (inframe):
-            print(frame[-1]+1)
-            spatial_pos = np.column_stack((x, y, z))
-            pos.create_dataset(str(frame[-1]+1), data=spatial_pos)
+            print(frame[-1] + 1)
+
+            genomicStack = np.column_stack((bpStart, bpEnd))
+            genomicPosition.create_dataset(str(frame[-1] + 1), data=genomicStack)
+
+            xyzStack = np.column_stack((x, y, z))
+            spatialPosition.create_dataset(str(frame[-1] + 1), data=xyzStack)
+
             inframe = False
 
-        frame.append(int(info[1]))
-        geni, genj = [], []
+        frame.append(int(record[1]))
+        bpStart, bpEnd = [], []
         x,y,z = [], [], []
-        n_atoms = 0
+        traceLength = 0
         inframe = True
 
-    elif len(info) == 6:
-        geni.append(info[1])
-        genj.append(info[2])
-        x.append(to_float(info[3]))
-        y.append(to_float(info[4]))
-        z.append(to_float(info[5]))
-        chr_name = info[0]
-        print(chr_name)
-        n_atoms += 1
+    elif len(record) == 6:
 
+        # genomic stack
+        bpStart.append(int(record[1]))
+        bpEnd.append(int(record[2]))
 
-spatial_pos = np.column_stack((x, y, z))
-pos.create_dataset(str(frame[-1]+1), data=spatial_pos)
+        # spatial stack
+        x.append(to_float(record[3]))
+        y.append(to_float(record[4]))
+        z.append(to_float(record[5]))
 
-genseq = [[int(geni[n]), int(genj[n])] for n in range(len(geni))]
-C.create_dataset('genomic_position',data=np.array(genseq))
-        
-C.create_dataset('time',data=np.array(frame))
+        traceLength += 1
 
-H.attrs.update({'chromosome' : chr_name})
+genomicStack = np.column_stack((bpStart, bpEnd))
+genomicPosition.create_dataset(str(frame[-1] + 1), data=genomicStack)
+
+xyzStack = np.column_stack((x, y, z))
+spatialPosition.create_dataset(str(frame[-1] + 1), data=xyzStack)
+
+# TODO: Add this to the Header attributes?
+bpStartLength = len(bpStart)
+rangeBPStartLength = range(bpStartLength)
+genomicExtentList = [[int(bpStart[n]), int(bpEnd[n])] for n in range(len(bpStart))]
+
+root.create_dataset('time', data=np.array(frame))
+
+# TODO: Store chromosome in header?
+# header.attrs.update({'chromosome' : chr})
 
 cndbf.close()
 
